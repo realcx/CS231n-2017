@@ -181,7 +181,7 @@ class FullyConnectedNet(object):
             self.params['W'+str(l+1)] = np.random.randn(dim1, dim2) * weight_scale
             self.params['b'+str(l+1)] = np.zeros(dim2)
             dim1 = dim2
-            if self.use_batchnorm:
+            if self.use_batchnorm and l < self.num_layers - 1:
                 self.params['gamma'+str(l+1)] = np.ones(dim2)
                 self.params['beta'+str(l+1)]  = np.zeros(dim2)
         ############################################################################
@@ -247,7 +247,13 @@ class FullyConnectedNet(object):
         # forward propagation
         for l in range(1, L):
             W, b = self.params['W'+str(l)], self.params['b'+str(l)]
-            A, caches[l] = affine_relu_forward(A, W, b)
+            if self.use_batchnorm:
+                gamma    = self.params['gamma'+str(l)]
+                beta     = self.params['beta'+str(l)]
+                bn_param = self.bn_params[l-1]
+                A, caches[l] = affine_bn_relu_forward(A, W, b, gamma, beta, bn_param)
+            else:
+                A, caches[l] = affine_relu_forward(A, W, b)
         W, b = self.params['W'+str(L)], self.params['b'+str(L)]
         scores, caches[L] = affine_forward(A, W, b)
         ############################################################################
@@ -285,8 +291,14 @@ class FullyConnectedNet(object):
         # relu grads
         for l in range(L-1, 0, -1):
             cache = caches[l]
-            dout, grads['W'+str(l)], grads['b'+str(l)] = affine_relu_backward(dout, cache)
-            grads['W'+str(l)] += self.reg * self.params['W'+str(l)]
+            if self.use_batchnorm:
+                dout, dw, db, dgamma, dbeta = affine_bn_relu_backward(dout, cache)
+                grads['gamma'+str(l)] = dgamma
+                grads['beta'+str(l)]  = dbeta
+            else:
+                dout, dw, db = affine_relu_backward(dout, cache)
+            grads['W'+str(l)] = dw + self.reg * self.params['W'+str(l)]
+            grads['b'+str(l)] = db
         ############################################################################
         #                             END OF YOUR CODE                             #
         ############################################################################
